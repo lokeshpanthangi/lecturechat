@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,88 +16,54 @@ import {
   Video,
   Calendar
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Video {
   id: string;
   title: string;
-  subject: string;
-  duration: string;
-  uploadDate: string;
+  subject: string | null;
+  duration: string | null;
+  created_at: string;
   status: 'processing' | 'ready' | 'failed';
-  thumbnail: string;
-  description: string;
-  chatCount: number;
+  description: string | null;
+  file_path: string;
 }
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterSubject, setFilterSubject] = useState('all');
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data - in a real app, this would come from an API
-  const [videos] = useState<Video[]>([
-    {
-      id: 'demo-video',
-      title: 'Introduction to Machine Learning',
-      subject: 'Computer Science',
-      duration: '45:32',
-      uploadDate: '2024-01-15',
-      status: 'ready',
-      thumbnail: '/placeholder.svg',
-      description: 'Basic concepts of ML, supervised and unsupervised learning',
-      chatCount: 12
-    },
-    {
-      id: 'physics-101',
-      title: 'Newton\'s Laws of Motion',
-      subject: 'Physics',
-      duration: '38:15',
-      uploadDate: '2024-01-14',
-      status: 'ready',
-      thumbnail: '/placeholder.svg',
-      description: 'Understanding the three fundamental laws of motion',
-      chatCount: 8
-    },
-    {
-      id: 'calc-derivatives',
-      title: 'Calculus: Derivatives and Applications',
-      subject: 'Mathematics',
-      duration: '52:08',
-      uploadDate: '2024-01-13',
-      status: 'processing',
-      thumbnail: '/placeholder.svg',
-      description: 'Chain rule, product rule, and real-world applications',
-      chatCount: 0
-    },
-    {
-      id: 'history-wwii',
-      title: 'World War II: European Theater',
-      subject: 'History',
-      duration: '41:25',
-      uploadDate: '2024-01-12',
-      status: 'ready',
-      thumbnail: '/placeholder.svg',
-      description: 'Major battles and turning points in WWII Europe',
-      chatCount: 5
-    },
-    {
-      id: 'chemistry-bonds',
-      title: 'Chemical Bonding and Molecular Structure',
-      subject: 'Chemistry',
-      duration: '35:47',
-      uploadDate: '2024-01-11',
-      status: 'failed',
-      thumbnail: '/placeholder.svg',
-      description: 'Ionic, covalent, and metallic bonds explained',
-      chatCount: 0
+  useEffect(() => {
+    fetchVideos();
+  }, []);
+
+  const fetchVideos = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('videos')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setVideos((data || []).map(video => ({
+        ...video,
+        status: video.status as 'processing' | 'ready' | 'failed'
+      })));
+    } catch (error) {
+      console.error('Error fetching videos:', error);
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
-  const subjects = ['all', ...Array.from(new Set(videos.map(v => v.subject)))];
+  const subjects = ['all', ...Array.from(new Set(videos.map(v => v.subject).filter(Boolean)))];
 
   const filteredVideos = videos.filter(video => {
     const matchesSearch = video.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         video.subject.toLowerCase().includes(searchTerm.toLowerCase());
+                         (video.subject && video.subject.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesFilter = filterSubject === 'all' || video.subject === filterSubject;
     return matchesSearch && matchesFilter;
   });
@@ -117,11 +83,8 @@ const Dashboard = () => {
 
   const stats = {
     totalVideos: videos.length,
-    totalDuration: videos.reduce((acc, video) => {
-      const [minutes, seconds] = video.duration.split(':').map(Number);
-      return acc + minutes + (seconds / 60);
-    }, 0),
-    totalChats: videos.reduce((acc, video) => acc + video.chatCount, 0),
+    totalDuration: 0, // We'll calculate this when we add duration tracking
+    totalChats: 0, // We'll add chat tracking later
     readyVideos: videos.filter(v => v.status === 'ready').length
   };
 
@@ -170,7 +133,7 @@ const Dashboard = () => {
           <Card>
             <CardContent className="p-4 text-center">
               <Clock className="w-6 h-6 text-green-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-slate-900">{Math.floor(stats.totalDuration)}h</div>
+              <div className="text-2xl font-bold text-slate-900">--</div>
               <div className="text-sm text-slate-600">Total Duration</div>
             </CardContent>
           </Card>
@@ -218,7 +181,19 @@ const Dashboard = () => {
         </div>
 
         {/* Videos Grid */}
-        {filteredVideos.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="overflow-hidden">
+                <div className="w-full h-40 bg-slate-200 animate-pulse" />
+                <CardHeader>
+                  <div className="h-4 bg-slate-200 rounded animate-pulse mb-2" />
+                  <div className="h-6 bg-slate-200 rounded animate-pulse" />
+                </CardHeader>
+              </Card>
+            ))}
+          </div>
+        ) : filteredVideos.length === 0 ? (
           <Card className="text-center py-12">
             <CardContent>
               <Video className="w-12 h-12 text-slate-400 mx-auto mb-4" />
@@ -239,30 +214,30 @@ const Dashboard = () => {
             {filteredVideos.map((video) => (
               <Card key={video.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                 <div className="relative">
-                  <img 
-                    src={video.thumbnail} 
-                    alt={video.title}
-                    className="w-full h-40 object-cover bg-slate-200"
-                  />
+                  <div className="w-full h-40 bg-slate-200 flex items-center justify-center">
+                    <Video className="w-8 h-8 text-slate-400" />
+                  </div>
                   <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
                     <Play className="w-8 h-8 text-white" />
                   </div>
                   <div className="absolute top-2 right-2">
                     {getStatusBadge(video.status)}
                   </div>
-                  <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
-                    {video.duration}
-                  </div>
+                  {video.duration && (
+                    <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                      {video.duration}
+                    </div>
+                  )}
                 </div>
                 
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between">
                     <Badge variant="outline" className="text-xs">
-                      {video.subject}
+                      {video.subject || 'General'}
                     </Badge>
                     <div className="flex items-center text-xs text-slate-500">
                       <Calendar className="w-3 h-3 mr-1" />
-                      {new Date(video.uploadDate).toLocaleDateString()}
+                      {new Date(video.created_at).toLocaleDateString()}
                     </div>
                   </div>
                   <CardTitle className="text-lg line-clamp-2">{video.title}</CardTitle>
@@ -270,13 +245,13 @@ const Dashboard = () => {
                 
                 <CardContent className="pt-0">
                   <CardDescription className="line-clamp-2 mb-4">
-                    {video.description}
+                    {video.description || 'No description provided'}
                   </CardDescription>
                   
                   <div className="flex items-center justify-between">
                     <div className="flex items-center text-sm text-slate-600">
                       <MessageCircle className="w-4 h-4 mr-1" />
-                      {video.chatCount} chats
+                      0 chats
                     </div>
                     
                     {video.status === 'ready' ? (

@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import { Upload as UploadIcon, FileVideo, Play, ArrowLeft, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ProcessingStep {
   id: string;
@@ -85,31 +86,70 @@ const Upload = () => {
     }
   };
 
-  const simulateUpload = async () => {
+  const uploadVideo = async () => {
+    if (!file || !title.trim()) return;
+    
     setIsUploading(true);
     setCurrentStep(0);
     
-    // Simulate upload progress
-    for (let i = 0; i <= 100; i += 10) {
-      setUploadProgress(i);
-      await new Promise(resolve => setTimeout(resolve, 200));
+    try {
+      // Step 1: Upload to Supabase Storage
+      const fileName = `${Date.now()}-${file.name}`;
+      const filePath = `videos/${fileName}`;
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('lecture-videos')
+        .upload(filePath, file);
+      
+      if (uploadError) throw uploadError;
+      setUploadProgress(100);
+      
+      setCurrentStep(1);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Step 2: Save video metadata to database
+      const { data: videoData, error: dbError } = await supabase
+        .from('videos')
+        .insert({
+          title: title.trim(),
+          description: description.trim() || null,
+          subject: subject.trim() || null,
+          file_name: fileName,
+          file_path: filePath,
+          status: 'ready'
+        })
+        .select()
+        .single();
+      
+      if (dbError) throw dbError;
+      
+      // Simulate remaining processing steps
+      for (let i = 2; i < processingSteps.length; i++) {
+        setCurrentStep(i);
+        await new Promise(resolve => setTimeout(resolve, 800));
+      }
+      
+      toast({
+        title: 'Upload successful!',
+        description: 'Your video is ready for chat.',
+      });
+      
+      // Navigate to chat with the actual video ID
+      setTimeout(() => {
+        navigate(`/chat/${videoData.id}`);
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Upload error:', error);
+      toast({
+        title: 'Upload failed',
+        description: 'There was an error uploading your video. Please try again.',
+        variant: 'destructive'
+      });
+      setIsUploading(false);
+      setCurrentStep(0);
+      setUploadProgress(0);
     }
-    
-    // Simulate processing steps
-    for (let i = 0; i < processingSteps.length; i++) {
-      setCurrentStep(i);
-      await new Promise(resolve => setTimeout(resolve, 1500));
-    }
-    
-    toast({
-      title: 'Upload successful!',
-      description: 'Your video is ready for chat.',
-    });
-    
-    // Navigate to chat after completion
-    setTimeout(() => {
-      navigate('/chat/demo-video');
-    }, 1000);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -122,7 +162,7 @@ const Upload = () => {
       });
       return;
     }
-    simulateUpload();
+    uploadVideo();
   };
 
   const getStepStatus = (index: number): 'pending' | 'active' | 'completed' => {

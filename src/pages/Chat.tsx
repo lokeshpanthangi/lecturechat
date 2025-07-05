@@ -18,6 +18,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Message {
   id: string;
@@ -30,12 +31,25 @@ interface Message {
   }>;
 }
 
+interface VideoData {
+  id: string;
+  title: string;
+  subject: string | null;
+  duration: string | null;
+  description: string | null;
+  file_path: string;
+}
+
 const Chat = () => {
   const { videoId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const videoRef = useRef<HTMLVideoElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  const [video, setVideo] = useState<VideoData | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string>('');
+  const [loading, setLoading] = useState(true);
   
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -53,13 +67,41 @@ const Chat = () => {
   const [volume, setVolume] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Mock video data
-  const videoData = {
-    id: videoId,
-    title: 'Introduction to Machine Learning',
-    subject: 'Computer Science',
-    duration: '45:32',
-    src: '/placeholder.svg' // In a real app, this would be the actual video URL
+  useEffect(() => {
+    if (videoId) {
+      fetchVideo();
+    }
+  }, [videoId]);
+
+  const fetchVideo = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('videos')
+        .select('*')
+        .eq('id', videoId)
+        .single();
+      
+      if (error) throw error;
+      
+      if (data) {
+        setVideo(data);
+        // Get the public URL for the video
+        const { data: urlData } = supabase.storage
+          .from('lecture-videos')
+          .getPublicUrl(data.file_path);
+        
+        setVideoUrl(urlData.publicUrl);
+      }
+    } catch (error) {
+      console.error('Error fetching video:', error);
+      toast({
+        title: 'Error loading video',
+        description: 'Could not load the video. Please try again.',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const scrollToBottom = () => {
@@ -203,6 +245,31 @@ const Chat = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+          <p>Loading video...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!video) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">Video not found</h2>
+          <Button onClick={() => navigate('/dashboard')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Dashboard
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -218,11 +285,11 @@ const Chat = () => {
               Dashboard
             </Button>
             <div className="flex-1">
-              <h1 className="text-lg font-semibold text-slate-900">{videoData.title}</h1>
+              <h1 className="text-lg font-semibold text-slate-900">{video.title}</h1>
               <div className="flex items-center space-x-2 text-sm text-slate-600">
-                <Badge variant="outline">{videoData.subject}</Badge>
+                <Badge variant="outline">{video.subject || 'General'}</Badge>
                 <span>•</span>
-                <span>{videoData.duration}</span>
+                <span>{video.duration || 'Unknown duration'}</span>
               </div>
             </div>
           </div>
@@ -240,9 +307,8 @@ const Chat = () => {
                   className="w-full h-full"
                   onTimeUpdate={handleTimeUpdate}
                   onLoadedMetadata={handleLoadedMetadata}
-                  poster="/placeholder.svg"
+                  src={videoUrl}
                 >
-                  <source src="/placeholder.mp4" type="video/mp4" />
                   Your browser does not support the video tag.
                 </video>
                 
