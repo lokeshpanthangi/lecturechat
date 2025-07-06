@@ -93,63 +93,120 @@ const Upload = () => {
     setCurrentStep(0);
     
     try {
-      // Step 1: Upload to Supabase Storage
-      const fileName = `${Date.now()}-${file.name}`;
-      const filePath = `videos/${fileName}`;
+      // Create FormData for file upload
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('title', title.trim());
+      formData.append('subject', subject.trim() || '');
+      formData.append('description', description.trim() || '');
       
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('lecture-videos')
-        .upload(filePath, file);
+      // Upload to backend API with progress tracking
+      const xhr = new XMLHttpRequest();
       
-      if (uploadError) throw uploadError;
-      setUploadProgress(100);
+      // Track upload progress
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const progress = Math.round((e.loaded / e.total) * 100);
+          setUploadProgress(progress);
+        }
+      });
       
-      setCurrentStep(1);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Handle response
+      const uploadPromise = new Promise((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            resolve(JSON.parse(xhr.responseText));
+          } else {
+            reject(new Error(`Upload failed: ${xhr.statusText}`));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Upload failed'));
+      });
       
-      // Step 2: Save video metadata to database
-      const { data: videoData, error: dbError } = await supabase
-        .from('videos')
-        .insert({
-          title: title.trim(),
-          description: description.trim() || null,
-          subject: subject.trim() || null,
-          file_name: fileName,
-          file_path: filePath,
-          status: 'ready'
-        })
-        .select()
-        .single();
+      // Start upload
+      xhr.open('POST', 'http://localhost:3001/api/upload');
+      xhr.send(formData);
       
-      if (dbError) throw dbError;
+      const uploadResponse = await uploadPromise;
       
-      // Simulate remaining processing steps
-      for (let i = 2; i < processingSteps.length; i++) {
-        setCurrentStep(i);
-        await new Promise(resolve => setTimeout(resolve, 800));
+      if (!uploadResponse.success) {
+        throw new Error(uploadResponse.error || 'Upload failed');
       }
       
+      const videoId = uploadResponse.videoId;
+      console.log('Upload successful, video ID:', videoId);
+      
+      // Move to processing steps
+      setCurrentStep(1);
+      
+      // Poll for processing status
+      await pollProcessingStatus(videoId);
+      
       toast({
-        title: 'Upload successful!',
+        title: 'Processing complete!',
         description: 'Your video is ready for chat.',
       });
       
       // Navigate to chat with the actual video ID
       setTimeout(() => {
-        navigate(`/chat/${videoData.id}`);
+        navigate(`/chat/${videoId}`);
       }, 1000);
       
     } catch (error) {
       console.error('Upload error:', error);
       toast({
         title: 'Upload failed',
-        description: 'There was an error uploading your video. Please try again.',
+        description: error.message || 'There was an error uploading your video. Please try again.',
         variant: 'destructive'
       });
       setIsUploading(false);
       setCurrentStep(0);
       setUploadProgress(0);
     }
+  };
+  
+  const pollProcessingStatus = async (videoId: string) => {
+    const maxPollingTime = 10 * 60 * 1000; // 10 minutes
+    const pollingInterval = 3000; // 3 seconds
+    const startTime = Date.now();
+    
+    while (Date.now() - startTime < maxPollingTime) {
+      try {
+        const response = await fetch(`http://localhost:3001/api/processing/status/${videoId}`);
+        const data = await response.json();
+        
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to get processing status');
+        }
+        
+        const video = data.video;
+        const stage = video.processing_stage;
+        const progress = video.processing_progress || 0;
+        
+        // Update UI based on processing stage
+        if (stage === 'audio_extraction') {
+          setCurrentStep(1);
+        } else if (stage === 'transcription') {
+          setCurrentStep(2);
+        } else if (stage === 'chunking' || stage === 'embedding') {
+          setCurrentStep(3);
+        } else if (stage === 'completed' || video.status === 'ready') {
+          setCurrentStep(4);
+          return; // Processing complete
+        } else if (video.status === 'failed') {
+          throw new Error(video.error_message || 'Processing failed');
+        }
+        
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, pollingInterval));
+        
+      } catch (error) {
+        console.error('Status polling error:', error);
+        throw error;
+      }
+    }
+    
+    throw new Error('Processing timeout - please check the video status later');
   };
 
   const handleSubmit = (e: React.FormEvent) => {

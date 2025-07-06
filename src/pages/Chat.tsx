@@ -168,46 +168,49 @@ const Chat = () => {
     }
   };
 
-  const simulateAIResponse = async (userMessage: string): Promise<Message> => {
-    await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1000));
-    
-    // Mock AI responses with timestamps
-    const responses = [
-      {
-        content: "Great question! The concept of supervised learning is introduced at the beginning of the lecture. Let me break this down for you with specific references to the video.",
-        timestamps: [
-          { time: 120, label: "Definition of supervised learning" },
-          { time: 245, label: "Examples of supervised learning" },
-          { time: 387, label: "Comparison with unsupervised learning" }
-        ]
-      },
-      {
-        content: "The mathematical foundations are covered in detail during the middle section. Here are the key moments where these concepts are explained:",
-        timestamps: [
-          { time: 540, label: "Linear regression equations" },
-          { time: 678, label: "Cost function derivation" },
-          { time: 892, label: "Gradient descent algorithm" }
-        ]
-      },
-      {
-        content: "This topic is discussed throughout several parts of the lecture. I've identified the most relevant sections for you:",
-        timestamps: [
-          { time: 156, label: "Introduction to the concept" },
-          { time: 445, label: "Practical applications" },
-          { time: 723, label: "Common pitfalls and solutions" }
-        ]
+  const getAIResponse = async (userMessage: string): Promise<Message> => {
+    try {
+      const response = await fetch('http://localhost:3001/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          videoId: videoId,
+          conversationId: `conv_${videoId}_${Date.now()}`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    ];
-    
-    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-    
-    return {
-      id: Date.now().toString(),
-      type: 'ai',
-      content: randomResponse.content,
-      timestamp: new Date(),
-      videoTimestamps: randomResponse.timestamps
-    };
+
+      const data = await response.json();
+      
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to get AI response');
+      }
+
+      // Parse timestamps from the response if they exist
+      const videoTimestamps = data.timestamps?.map((timestamp: any) => ({
+        time: timestamp.time || 0,
+        label: timestamp.text || timestamp.timeString || 'Reference'
+      })) || [];
+
+      console.log('📍 Received timestamps:', data.timestamps);
+      console.log('📍 Processed videoTimestamps:', videoTimestamps);
+      return {
+        id: Date.now().toString(),
+        type: 'ai',
+        content: data.response,
+        timestamp: new Date(),
+        videoTimestamps: videoTimestamps
+      };
+    } catch (error) {
+      console.error('Error getting AI response:', error);
+      throw error;
+    }
   };
 
   const handleSendMessage = async () => {
@@ -225,9 +228,10 @@ const Chat = () => {
     setIsLoading(true);
     
     try {
-      const aiResponse = await simulateAIResponse(inputMessage);
+      const aiResponse = await getAIResponse(inputMessage);
       setMessages(prev => [...prev, aiResponse]);
     } catch (error) {
+      console.error('Chat error:', error);
       toast({
         title: 'Error',
         description: 'Failed to get AI response. Please try again.',
