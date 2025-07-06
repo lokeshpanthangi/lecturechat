@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
-import { Upload as UploadIcon, FileVideo, Play, ArrowLeft, CheckCircle, Clock, Loader2 } from 'lucide-react';
+import { Upload as UploadIcon, FileVideo, FileAudio, Play, ArrowLeft, CheckCircle, Clock, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -29,9 +29,9 @@ const Upload = () => {
   const [subject, setSubject] = useState('');
   const [currentStep, setCurrentStep] = useState(0);
   
-  const [processingSteps] = useState<ProcessingStep[]>([
-    { id: 'upload', title: 'Uploading video...', status: 'pending' },
-    { id: 'extract', title: 'Extracting audio...', status: 'pending' },
+  const [processingSteps, setProcessingSteps] = useState<ProcessingStep[]>([
+    { id: 'upload', title: 'Uploading file...', status: 'pending' },
+    { id: 'extract', title: 'Processing audio...', status: 'pending' },
     { id: 'transcript', title: 'Generating transcript...', status: 'pending' },
     { id: 'embeddings', title: 'Creating embeddings...', status: 'pending' },
     { id: 'ready', title: 'Ready for chat!', status: 'pending' }
@@ -59,13 +59,16 @@ const Upload = () => {
 
   const handleFiles = (files: FileList) => {
     const file = files[0];
-    const allowedTypes = ['video/mp4', 'video/avi', 'video/mov', 'video/quicktime'];
+    const allowedTypes = [
+      'video/mp4', 'video/avi', 'video/mov', 'video/quicktime',
+      'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/m4a', 'audio/aac'
+    ];
     const maxSize = 2 * 1024 * 1024 * 1024; // 2GB
     
     if (!allowedTypes.includes(file.type)) {
       toast({
         title: 'Invalid file type',
-        description: 'Please upload MP4, AVI, or MOV files only.',
+        description: 'Please upload video files (MP4, AVI, MOV) or audio files (MP3, WAV, M4A, AAC).',
         variant: 'destructive'
       });
       return;
@@ -255,7 +258,7 @@ const Upload = () => {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-slate-900 mb-2">Upload Your Lecture</h1>
-          <p className="text-lg text-slate-600">Transform your video into an interactive learning experience</p>
+          <p className="text-lg text-slate-600">Transform your video or audio into an interactive learning experience</p>
         </div>
 
         {!isUploading ? (
@@ -263,9 +266,9 @@ const Upload = () => {
             {/* Upload Area */}
             <Card>
               <CardHeader>
-                <CardTitle>Select Video File</CardTitle>
+                <CardTitle>Select Video or Audio File</CardTitle>
                 <CardDescription>
-                  Drag and drop your lecture video or click to browse. Supports MP4, AVI, MOV up to 2GB.
+                  Drag and drop your lecture file or click to browse. Supports video (MP4, AVI, MOV) and audio (MP3, WAV, M4A, AAC) up to 2GB.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -284,7 +287,7 @@ const Upload = () => {
                 >
                   <input
                     type="file"
-                    accept="video/mp4,video/avi,video/mov,video/quicktime"
+                    accept="video/mp4,video/avi,video/mov,video/quicktime,audio/mpeg,audio/mp3,audio/wav,audio/m4a,audio/aac"
                     onChange={(e) => e.target.files && handleFiles(e.target.files)}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
@@ -309,20 +312,26 @@ const Upload = () => {
                         <p className="text-lg font-medium text-slate-900">
                           Choose files or drag and drop
                         </p>
-                        <p className="text-sm text-slate-600">MP4, AVI, MOV up to 2GB</p>
+                        <p className="text-sm text-slate-600">Video or Audio files up to 2GB</p>
                       </div>
-                      <div className="flex items-center justify-center space-x-4 text-sm text-slate-500">
-                        <div className="flex items-center">
-                          <FileVideo className="w-4 h-4 mr-1" />
-                          MP4
+                      <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
+                        <div className="text-center">
+                          <p className="text-xs font-medium text-slate-700 mb-2">Video Formats</p>
+                          <div className="space-y-1 text-sm text-slate-500">
+                            <div className="flex items-center justify-center">
+                              <FileVideo className="w-4 h-4 mr-1" />
+                              MP4, AVI, MOV
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex items-center">
-                          <FileVideo className="w-4 h-4 mr-1" />
-                          AVI
-                        </div>
-                        <div className="flex items-center">
-                          <FileVideo className="w-4 h-4 mr-1" />
-                          MOV
+                        <div className="text-center">
+                          <p className="text-xs font-medium text-slate-700 mb-2">Audio Formats</p>
+                          <div className="space-y-1 text-sm text-slate-500">
+                            <div className="flex items-center justify-center">
+                              <FileAudio className="w-4 h-4 mr-1" />
+                              MP3, WAV, M4A, AAC
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -334,7 +343,7 @@ const Upload = () => {
             {/* Video Details */}
             <Card>
               <CardHeader>
-                <CardTitle>Video Details</CardTitle>
+                <CardTitle>Lecture Details</CardTitle>
                 <CardDescription>
                   Add information about your lecture to help organize your content
                 </CardDescription>
@@ -377,13 +386,13 @@ const Upload = () => {
               className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
               disabled={!file || !title.trim()}
             >
-              Upload and Process Video
+              Upload and Process {file?.type.startsWith('video/') ? 'Video' : file?.type.startsWith('audio/') ? 'Audio' : 'File'}
             </Button>
           </form>
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="text-center">Processing Your Video</CardTitle>
+              <CardTitle className="text-center">Processing Your {file?.type.startsWith('video/') ? 'Video' : 'Audio'}</CardTitle>
               <CardDescription className="text-center">
                 Please wait while we prepare your lecture for interactive chat
               </CardDescription>
@@ -428,7 +437,7 @@ const Upload = () => {
               {currentStep >= processingSteps.length && (
                 <div className="text-center py-4">
                   <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-2" />
-                  <p className="text-lg font-medium text-green-700">Video ready for chat!</p>
+                  <p className="text-lg font-medium text-green-700">Lecture ready for chat!</p>
                   <p className="text-sm text-slate-600">Redirecting to chat interface...</p>
                 </div>
               )}

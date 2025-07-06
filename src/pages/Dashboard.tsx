@@ -214,10 +214,32 @@ const Dashboard = () => {
             {filteredVideos.map((video) => (
               <Card key={video.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                 <div className="relative">
-                  <div className="w-full h-40 bg-slate-200 flex items-center justify-center">
-                    <Video className="w-8 h-8 text-slate-400" />
+                  <div className="w-full h-40 bg-slate-900 overflow-hidden">
+                    <video
+                      className="w-full h-full object-cover"
+                      src={supabase.storage.from('lecture-videos').getPublicUrl(video.file_path).data.publicUrl}
+                      preload="metadata"
+                      muted
+                      onLoadedMetadata={(e) => {
+                        const video = e.target as HTMLVideoElement;
+                        video.currentTime = 1; // Seek to 1 second to get a better thumbnail
+                      }}
+                      onSeeked={(e) => {
+                        const video = e.target as HTMLVideoElement;
+                        const canvas = document.createElement('canvas');
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                          ctx.drawImage(video, 0, 0);
+                          const thumbnail = canvas.toDataURL('image/jpeg', 0.8);
+                          video.poster = thumbnail;
+                        }
+                      }}
+                    />
                   </div>
-                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                  <div className="absolute inset-0 bg-black/20 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer"
+                       onClick={() => video.status === 'ready' && navigate(`/chat/${video.id}`)}>
                     <Play className="w-8 h-8 text-white" />
                   </div>
                   <div className="absolute top-2 right-2">

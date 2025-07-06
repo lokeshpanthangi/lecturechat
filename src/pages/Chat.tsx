@@ -312,6 +312,8 @@ const Chat = () => {
                   onTimeUpdate={handleTimeUpdate}
                   onLoadedMetadata={handleLoadedMetadata}
                   src={videoUrl}
+                  poster="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAwIiBoZWlnaHQ9IjQ1MCIgdmlld0JveD0iMCAwIDgwMCA0NTAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSI4MDAiIGhlaWdodD0iNDUwIiBmaWxsPSIjMUUyOTNiIi8+CjxjaXJjbGUgY3g9IjQwMCIgY3k9IjIyNSIgcj0iNDAiIGZpbGw9IiM2MzY2RjEiLz4KPHN2ZyB4PSIzODAiIHk9IjIwNSIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiB2aWV3Qm94PSIwIDAgMjQgMjQiIGZpbGw9IndoaXRlIj4KPHA+PHBhdGggZD0ibTkuNSAxNi41IDctNC41LTctNC41djl6Ii8+PC9wPgo8L3N2Zz4KPHR4dCB4PSI0MDAiIHk9IjI5MCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiBmaWxsPSIjOTQ5NEE0IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5DbGljayB0byBwbGF5IGxlY3R1cmU8L3R4dD4KPC9zdmc+"
+                  preload="metadata"
                 >
                   Your browser does not support the video tag.
                 </video>
@@ -392,7 +394,7 @@ const Chat = () => {
               </div>
               
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[calc(100vh-400px)] min-h-[300px]">
                 {messages.map((message) => (
                   <div
                     key={message.id}
